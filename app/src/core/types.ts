@@ -121,6 +121,7 @@ export interface ZiweiGongInfo {
   };
   liuNian?: number[]; // 流年年龄列表
   liuNianYear?: number; // 流年年份（如2025），按地支固定位置
+  liuNianGongName?: string; // 流年宫位名（如"年命""年兄"等），基于选中流年计算
 }
 
 // 紫微斗数排盘结果

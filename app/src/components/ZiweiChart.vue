@@ -119,6 +119,11 @@
               <div v-if="gong.daXian?.daXianGongName" class="daxian-gong-label">
                 {{ gong.daXian.daXianGongName }}
               </div>
+              
+              <!-- 流年宫位名 - 显示在宫位右下角 -->
+              <div v-if="gong.liuNianGongName" class="liunian-gong-label">
+                {{ gong.liuNianGongName }}
+              </div>
             </div>
           </div>
         </div>
@@ -132,7 +137,7 @@
 </template>
 
 <script lang="ts" setup>
-import { defineProps, computed, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ZiweiChart } from '../core/types';
 import { calculateFeiHua, getSiHuaByGan } from '../core/sihua';
 
@@ -181,7 +186,7 @@ const getGongPosition = (dizhi: string): { position: string; arrow: string; rota
 };
 
 const orderedGongs = computed(() => {
-  const gongsWithUpdatedLiunian = props.chartData.gongs.map(gong => {
+  const gongsWithUpdatedLiunian = props.chartData.gongs.map((gong, index) => {
     // 如果选中了大限，重新计算流年分布
     let liuNianYear = gong.liuNianYear;
     
@@ -205,10 +210,87 @@ const orderedGongs = computed(() => {
       }
     }
     
+    // 计算大限宫位名和流年宫位名（基于选中的流年或大限）
+    let daXianGongName = gong.daXian?.daXianGongName;
+    let liuNianGongName: string | undefined;
+    
+    if (selectedDaXian.value) {
+      // 找到选中大限的起始宫位在十二宫中的位置
+      const selectedDaXianGongIndex = props.chartData.gongs.findIndex(g => {
+        const dizhiOrder = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+        const gZhiIndex = dizhiOrder.indexOf(g.dizhi);
+        return gZhiIndex === selectedDaXian.value.gongIndex;
+      });
+      
+      // 计算当前宫位相对于大限命宫的偏移
+      const offsetFromDaXianMing = (index - selectedDaXianGongIndex + 12) % 12;
+      
+      // 根据偏移获取大限宫位名
+      const daXianGongNameMap: { [key: string]: string } = {
+        '命宫': '大命',
+        '兄弟宫': '大兄',
+        '夫妻宫': '大夫',
+        '子女宫': '大子',
+        '财帛宫': '大财',
+        '疾厄宫': '大疾',
+        '迁移宫': '大迁',
+        '交友宫': '大友',
+        '官禄宫': '大官',
+        '田宅宫': '大田',
+        '福德宫': '大福',
+        '父母宫': '大父'
+      };
+      
+      const gongNamesOrder = ['命宫', '兄弟宫', '夫妻宫', '子女宫', '财帛宫', '疾厄宫', '迁移宫', '交友宫', '官禄宫', '田宅宫', '福德宫', '父母宫'];
+      const correspondingGongName = gongNamesOrder[offsetFromDaXianMing];
+      daXianGongName = daXianGongNameMap[correspondingGongName];
+    }
+    
+    // 如果选中了流年，计算流年宫位名
+    if (props.selectedYear) {
+      // 找到流年所在的宫位（流年命宫）
+      const dizhiOrder = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+      const yearZhiIndex = (props.selectedYear - 4) % 12;
+      const liuNianMingGongIndex = props.chartData.gongs.findIndex(g => {
+        const gZhiIndex = dizhiOrder.indexOf(g.dizhi);
+        return gZhiIndex === yearZhiIndex;
+      });
+      
+      if (liuNianMingGongIndex !== -1) {
+        // 计算当前宫位相对于流年命宫的偏移
+        const offsetFromLiuNianMing = (index - liuNianMingGongIndex + 12) % 12;
+        
+        // 根据偏移获取流年宫位名
+        const liuNianGongNameMap: { [key: string]: string } = {
+          '命宫': '年命',
+          '兄弟宫': '年兄',
+          '夫妻宫': '年夫',
+          '子女宫': '年子',
+          '财帛宫': '年财',
+          '疾厄宫': '年疾',
+          '迁移宫': '年迁',
+          '交友宫': '年友',
+          '官禄宫': '年官',
+          '田宅宫': '年田',
+          '福德宫': '年福',
+          '父母宫': '年父'
+        };
+        
+        const gongNamesOrder = ['命宫', '兄弟宫', '夫妻宫', '子女宫', '财帛宫', '疾厄宫', '迁移宫', '交友宫', '官禄宫', '田宅宫', '福德宫', '父母宫'];
+        const correspondingGongName = gongNamesOrder[offsetFromLiuNianMing];
+        liuNianGongName = liuNianGongNameMap[correspondingGongName];
+      }
+    }
+    
     return {
       ...gong,
       liuNianYear,
       pos: gridOrder[gong.dizhi],
+      daXian: gong.daXian ? {
+        ...gong.daXian,
+        daXianGongName
+      } : undefined,
+      liuNianGongName
     };
   });
   
@@ -701,12 +783,24 @@ const getFeiHuaBgClass = (gong: any, star: string): string => {
   position: absolute;
   left: 4px;
   bottom: 4px;
-  padding: 1px 4px;
+  padding: 1px 0;
   background-color: rgba(255, 255, 255, 0.9);
   color: #555555;
   font-size: 10px;
   font-weight: 500;
   border-radius: 2px;
+  z-index: 10;
+  pointer-events: none; /* 不阻挡点击事件 */
+}
+
+/* 流年宫位标签 - 显示在大运宫位标签上方，蓝色字体，无外框 */
+.liunian-gong-label {
+  position: absolute;
+  left: 4px;
+  bottom: 18px; /* 在大运宫位标签上方，留出足够空间 */
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 600;
   z-index: 10;
   pointer-events: none; /* 不阻挡点击事件 */
 }
