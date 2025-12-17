@@ -1,8 +1,7 @@
 // 紫微斗数排盘核心算法（按照标准安星法重写）
 
 import { BirthInfo, ZiweiChart, ZiweiGongInfo, GanZhi } from './types';
-// @ts-ignore
-import { Solar, Lunar } from 'lunar-javascript';
+import { Solar, Lunar } from 'lunar-typescript';
 import { addBenMingSiHua } from './sihua';
 import { calculateDaXian, calculateXuSui } from './daxian';
 

@@ -109,7 +109,8 @@ import DateTimeInput, { type DateTimeFormData } from '../components/DateTimeInpu
 import CaseManager from '../components/CaseManager.vue';
 import type { SavedCase } from '../core/types';
 import { getTianganIndex, getDizhiIndex } from '../core/ganzhi';
-import { Solar } from 'lunar-javascript';
+import { getAccurateMonthGanZhi } from '../core/jieqi';
+import { Solar } from 'lunar-typescript';
 
 // 输入模式
 const inputMode = ref<'date' | 'bazi'>('date');
@@ -350,80 +351,103 @@ const estimateDateFromBazi = (
       }
     }
     
-    const estimatedYear = jiaziCycle + yearJiaziIndex;
+    // 尝试多个甲子周期（当前周期和前后各一个周期）
+    const cyclesToTry = [jiaziCycle, jiaziCycle - 60, jiaziCycle + 60];
     
-    // 2. 从月柱推算月份范围
-    const monthZhi = monthGZ[1];
-    const monthRanges: Record<string, number[]> = {
-      '寅': [1, 2, 3],
-      '卯': [2, 3, 4],
-      '辰': [3, 4, 5],
-      '巳': [4, 5, 6],
-      '午': [5, 6, 7],
-      '未': [6, 7, 8],
-      '申': [7, 8, 9],
-      '酉': [8, 9, 10],
-      '戌': [9, 10, 11],
-      '亥': [10, 11, 12],
-      '子': [11, 12, 1],
-      '丑': [12, 1, 2],
-    };
-    
-    const searchMonths = monthRanges[monthZhi] || [6, 7, 8];
-    
-    // 3. 在月份范围内查找匹配的日期
-    let foundDate: { year: number; month: number; day: number } | null = null;
-    
-    for (const searchMonth of searchMonths) {
-      let searchYear = estimatedYear;
-      if (monthZhi === '子' && searchMonth === 1) {
-        searchYear = estimatedYear + 1;
-      } else if (monthZhi === '丑' && searchMonth === 1) {
-        searchYear = estimatedYear + 1;
+    for (const cycle of cyclesToTry) {
+      const estimatedYear = cycle + yearJiaziIndex;
+      
+      // 只搜索合理的年份范围（1900-2100）
+      if (estimatedYear < 1900 || estimatedYear > 2100) {
+        continue;
       }
       
-      const daysInMonth = new Date(searchYear, searchMonth, 0).getDate();
+      // 2. 从月柱推算月份范围
+      const monthZhi = monthGZ[1];
+      const monthRanges: Record<string, number[]> = {
+        '寅': [1, 2, 3],
+        '卯': [2, 3, 4],
+        '辰': [3, 4, 5],
+        '巳': [4, 5, 6],
+        '午': [5, 6, 7],
+        '未': [6, 7, 8],
+        '申': [7, 8, 9],
+        '酉': [8, 9, 10],
+        '戌': [9, 10, 11],
+        '亥': [10, 11, 12],
+        '子': [11, 12, 1],
+        '丑': [12, 1, 2],
+      };
       
-      for (let day = 1; day <= daysInMonth; day++) {
-        try {
-          const solar = (Solar as any).fromYmdHms(searchYear, searchMonth, day, 12, 0, 0);
-          const lunar = solar.getLunar();
-          
-          const lunarMonthGZ = lunar.getMonthInGanZhi();
-          const lunarDayGZ = lunar.getDayInGanZhi();
-          
-          if (lunarMonthGZ === monthGZ && lunarDayGZ === dayGZ) {
-            foundDate = { year: searchYear, month: searchMonth, day };
-            break;
-          }
-        } catch (e) {
-          continue;
+      const searchMonths = monthRanges[monthZhi] || [6, 7, 8];
+      
+      // 3. 在月份范围内查找匹配的日期
+      let foundDate: { year: number; month: number; day: number } | null = null;
+      
+      for (const searchMonth of searchMonths) {
+        let searchYear = estimatedYear;
+        if (monthZhi === '子' && searchMonth === 1) {
+          searchYear = estimatedYear + 1;
+        } else if (monthZhi === '丑' && searchMonth === 1) {
+          searchYear = estimatedYear + 1;
         }
+        
+        const daysInMonth = new Date(searchYear, searchMonth, 0).getDate();
+        
+        for (let day = 1; day <= daysInMonth; day++) {
+          // 对于每一天，检查不同时辰的月柱（因为节气可能在某个时辰交接）
+          for (let checkHour = 0; checkHour < 24; checkHour += 2) {
+            try {
+              const solar = (Solar as any).fromYmdHms(searchYear, searchMonth, day, checkHour, 0, 0);
+              const lunar = solar.getLunar();
+              
+              // 使用精确节气时刻计算月柱
+              const accurateMonthGZ = getAccurateMonthGanZhi(solar);
+              const calculatedMonthGZ = `${accurateMonthGZ.gan}${accurateMonthGZ.zhi}`;
+              const lunarDayGZ = lunar.getDayInGanZhi();
+              
+              if (calculatedMonthGZ === monthGZ && lunarDayGZ === dayGZ) {
+                foundDate = { year: searchYear, month: searchMonth, day };
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          if (foundDate) break;
+        }
+        
+        if (foundDate) break;
       }
       
-      if (foundDate) break;
+      if (foundDate) {
+        // 找到匹配的日期
+        // 4. 从时柱推算时辰
+        const hourZhi = hourGZ[1];
+        const hourZhiToHour: Record<string, number> = {
+          '子': 0, '丑': 2, '寅': 4, '卯': 6, '辰': 8, '巳': 10,
+          '午': 12, '未': 14, '申': 16, '酉': 18, '戌': 20, '亥': 22
+        };
+        const estimatedHour = hourZhiToHour[hourZhi] || 12;
+        
+        console.log(`✅ 找到匹配日期: ${foundDate.year}-${foundDate.month}-${foundDate.day} ${estimatedHour}时`);
+        
+        return {
+          year: foundDate.year,
+          month: foundDate.month,
+          day: foundDate.day,
+          hour: estimatedHour,
+          minute: 0,
+        };
+      }
     }
     
-    if (!foundDate) {
-      console.error(`未找到匹配的日期: ${yearGZ} ${monthGZ} ${dayGZ}`);
-      return null;
-    }
-    
-    // 4. 从时柱推算时辰
-    const hourZhi = hourGZ[1];
-    const hourZhiToHour: Record<string, number> = {
-      '子': 0, '丑': 2, '寅': 4, '卯': 6, '辰': 8, '巳': 10,
-      '午': 12, '未': 14, '申': 16, '酉': 18, '戌': 20, '亥': 22
-    };
-    const estimatedHour = hourZhiToHour[hourZhi] || 12;
-    
-    return {
-      year: foundDate.year,
-      month: foundDate.month,
-      day: foundDate.day,
-      hour: estimatedHour,
-      minute: 0,
-    };
+    // 所有周期都没找到匹配
+    console.error(`未找到匹配的日期: ${yearGZ} ${monthGZ} ${dayGZ}`);
+    console.error(`已搜索的年份周期: ${cyclesToTry.map(c => c + yearJiaziIndex).join(', ')}`);
+    ElMessage.error(`无法找到八字 ${yearGZ} ${monthGZ} ${dayGZ} ${hourGZ} 对应的日期。请检查八字是否正确，或尝试调整甲子周期。`);
+    return null;
   } catch (error) {
     console.error('推算日期失败:', error);
     return null;

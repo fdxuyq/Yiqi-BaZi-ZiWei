@@ -1,10 +1,10 @@
 // 八字排盘核心算法（使用lunar-javascript库）
 
 import { BirthInfo, BaziChart, SiZhu, Tiangan, DayunDetail, LiuNian, GanZhi } from './types';
-// @ts-ignore
-import { Lunar, Solar } from 'lunar-javascript';
+import { Lunar, Solar } from 'lunar-typescript';
 import { getSiZhuChangSheng } from './zhangsheng';
 import { getSiZhuNaYin } from './nayin';
+import { getAccurateMonthGanZhi } from './jieqi';
 
 /**
  * 十神关系映射
@@ -100,6 +100,9 @@ export function createBaziChart(birthInfo: BirthInfo): BaziChart {
     // 获取八字
     const baZi = lunar.getEightChar();
 
+    // 使用精确节气时刻计算月柱
+    const accurateMonthGZ = getAccurateMonthGanZhi(solar);
+
     // 获取四柱干支
     const siZhu: SiZhu = {
       year: {
@@ -107,8 +110,8 @@ export function createBaziChart(birthInfo: BirthInfo): BaziChart {
         zhi: baZi.getYear().substring(1, 2) as any
       },
       month: {
-        gan: baZi.getMonth().substring(0, 1) as Tiangan,
-        zhi: baZi.getMonth().substring(1, 2) as any
+        gan: accurateMonthGZ.gan,  // 使用精确节气计算的月柱
+        zhi: accurateMonthGZ.zhi,  // 使用精确节气计算的月柱
       },
       day: {
         gan: baZi.getDay().substring(0, 1) as Tiangan,
