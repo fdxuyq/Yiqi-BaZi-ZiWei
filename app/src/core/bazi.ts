@@ -78,6 +78,26 @@ export function getZhiCangGanFull(zhi: string, dayMaster: string): Array<{ gan: 
 }
 
 /**
+ * 处理晚子时（23:00-24:00）的日柱
+ * 在传统命理中，晚子时应该使用第二天的日柱
+ * @param solar Solar对象
+ * @returns 调整后的Solar对象（如果是晚子时）
+ */
+function getAdjustedSolarForZiShi(solar: Solar): Solar {
+  const hour = solar.getHour();
+  
+  // 如果是晚子时（23:00-24:00），使用第二天的日期计算日柱
+  if (hour === 23) {
+    console.log('[晚子时处理] 23点，使用第二天的日柱');
+    // 获取第二天的日期
+    const nextDay = solar.next(1); // 下一天
+    return nextDay;
+  }
+  
+  return solar;
+}
+
+/**
  * 创建八字排盘（使用lunar-javascript库）
  * @param birthInfo 生辰信息
  * @returns 八字排盘结果
@@ -94,7 +114,12 @@ export function createBaziChart(birthInfo: BirthInfo): BaziChart {
       0
     );
 
-    // 转换为农历
+    // 处理晚子时（23:00-24:00），使用第二天的日柱
+    const solarForDay = getAdjustedSolarForZiShi(solar);
+    const lunarForDay = solarForDay.getLunar();
+    const baZiForDay = lunarForDay.getEightChar();
+
+    // 转换为农历（用于年柱、月柱、时柱）
     const lunar = solar.getLunar();
 
     // 获取八字
@@ -114,8 +139,8 @@ export function createBaziChart(birthInfo: BirthInfo): BaziChart {
         zhi: accurateMonthGZ.zhi,  // 使用精确节气计算的月柱
       },
       day: {
-        gan: baZi.getDay().substring(0, 1) as Tiangan,
-        zhi: baZi.getDay().substring(1, 2) as any
+        gan: baZiForDay.getDay().substring(0, 1) as Tiangan,  // 使用调整后的日柱（处理晚子时）
+        zhi: baZiForDay.getDay().substring(1, 2) as any       // 使用调整后的日柱（处理晚子时）
       },
       hour: {
         gan: baZi.getTime().substring(0, 1) as Tiangan,
